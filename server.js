@@ -37,7 +37,30 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/media', mediaRoutes);
-
+app.get('/', (req, res) => {
+  res.json({
+    message: '🎉 Chat App API is running successfully!',
+    version: '1.0.0', // Simplified version
+    features: [
+      '✅ Message Read Receipts',
+      '✅ Unread Count',
+      '✅ Message Attachments',
+      '✅ Rate Limiting',
+      '✅ Block Users',
+      '✅ react message',
+      '✅ Group Chats',
+      '✅ Message Search',
+      '✅ Message Reactions',
+      '✅ Message Forwarding'
+    ],
+    endpoints: {
+      auth: '/api/auth',
+      users: '/api/users',
+      chats: '/api/chat',
+      messages: '/api/message'
+    }
+  });
+});
 // Socket Logic
 const userStatusMap = new Map(); // Stores: userId -> { status, lastSeen, socketId }
 
