@@ -1,3 +1,4 @@
+// ChatBackend/routes/groupRoutes.js
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
@@ -14,25 +15,19 @@ const {
   togglePermissions 
 } = require('../controllers/chatController');
 
-// Match List: POST /groups
-router.post('/', auth, createGroup);
+// [FIX] Added upload middleware to handle FormData & Image
+router.post('/', auth, upload.single('groupIcon'), optimizeAvatar, createGroup);
 
-// Match List: PATCH /groups/:groupId/info
+// Update Info
 router.patch('/:groupId/info', auth, upload.single('groupIcon'), optimizeAvatar, updateGroupInfo);
 
-// Match List: POST /groups/:groupId/participants
+// Participants
 router.post('/:groupId/participants', auth, addToGroup);
-
-// Match List: DELETE /groups/:groupId/participants
 router.delete('/:groupId/participants', auth, removeFromGroup);
 
-// Match List: DELETE /groups/:groupId/leave
+// Other Actions
 router.delete('/:groupId/leave', auth, leaveGroup);
-
-// Match List: PATCH /groups/:groupId/admin
 router.patch('/:groupId/admin', auth, toggleAdmin);
-
-// Match List: PATCH /groups/:groupId/permissions
 router.patch('/:groupId/permissions', auth, togglePermissions);
 
 module.exports = router;

@@ -1,33 +1,56 @@
+// ChatBackend/routes/chatRoutes.js
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
-const upload = require('../middleware/uploadMiddleware'); // [ADD THIS]
+const upload = require('../middleware/uploadMiddleware'); 
 const { optimizeChatMedia } = require('../middleware/imageOptimizer');
 const { 
   accessChat, fetchChats, getChatDetails,
-  deleteChatHistory, setWallpaper, getChatMedia 
+  deleteChatHistory, setWallpaper, getChatMedia,
+  requestDeleteChat, 
+  respondDeleteChat
 } = require('../controllers/chatController');
 
 // Import message logic
 const { allMessages, sendMessage, searchInChat } = require('../controllers/messageController');
 
-// 1-on-1 Management
-router.post('/dm', auth, accessChat);                 // POST /chats/dm
-router.get('/dm/:chatId', auth, getChatDetails);      // GET /chats/dm/:chatId
-router.delete('/dm/:chatId', auth, deleteChatHistory);// DELETE /chats/dm/:chatId
-router.patch('/dm/:chatId/wallpaper', auth, setWallpaper); //ZXPATCH /chats/dm/:chatId/wallpaper
+/* ============================
+   CHAT MANAGEMENT (Group & DM)
+   ============================ */
 
-// General Chat Listing
-router.get('/', auth, fetchChats);                    // GET /chats
+// Create or Access 1-on-1 Chat
+router.post('/', auth, accessChat);                 
 
-// Message Operations via Chat ID
-router.get('/:chatId/messages', auth, allMessages);   // GET /chats/:chatId/messages
+// Get All Chats (Main Screen)
+router.get('/', auth, fetchChats);                    
 
-// [NEW] Match List: POST /chats/:chatId/messages
- router.post('/:chatId/messages', auth, upload.single('file'), optimizeChatMedia, sendMessage);
+// Get Chat Details (Generic - Works for Group & DM)
+router.get('/:chatId', auth, getChatDetails);      
+
+// Delete History (Soft Delete for User)
+router.delete('/:chatId', auth, deleteChatHistory);
+
+// Set Wallpaper
+router.patch('/:chatId/wallpaper', auth, setWallpaper); 
+
+/* ============================
+   MUTUAL DELETE HISTORY
+   ============================ */
+router.post('/delete-request', auth, requestDeleteChat);
+router.post('/delete-respond', auth, respondDeleteChat);
+
+/* ============================
+   MESSAGE OPERATIONS
+   ============================ */
+
+// Get Messages
+router.get('/:chatId/messages', auth, allMessages);   
+
+// Send Message (Text/Media)
+router.post('/:chatId/messages', auth, upload.single('file'), optimizeChatMedia, sendMessage);
 
 // Search & Media
-router.get('/:chatId/search', auth, searchInChat);    // GET /chats/:chatId/search
-router.get('/:chatId/media', auth, getChatMedia);     // GET /chats/:chatId/media
+router.get('/:chatId/search', auth, searchInChat);    
+router.get('/:chatId/media', auth, getChatMedia);     
 
 module.exports = router;

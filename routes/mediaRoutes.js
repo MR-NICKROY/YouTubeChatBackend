@@ -3,7 +3,11 @@ const router = express.Router();
 const auth = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 const { optimizeChatMedia } = require('../middleware/imageOptimizer');
-const { getTrendingGifs, secureDownload } = require('../controllers/mediaController');
+const { 
+  getTrendingGifs, 
+  secureDownload, 
+  deleteMedia 
+} = require('../controllers/mediaController');
 
 // Generic Upload Route (POST /media/upload)
 router.post('/upload', auth, upload.single('file'), optimizeChatMedia, (req, res) => {
@@ -28,7 +32,7 @@ router.post('/voice', auth, upload.single('file'), optimizeChatMedia, (req, res)
         size: req.file.size
     });
 });
-
+router.post('/delete', auth, deleteMedia);
 router.get('/gifs/trending', auth, getTrendingGifs);
 router.get('/download', auth, secureDownload);
 

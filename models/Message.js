@@ -1,33 +1,37 @@
+// ChatBackend/models/Message.js
 const mongoose = require('mongoose');
 
-const MessageSchema = new mongoose.Schema({
-  chat: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat' },
-  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  type: { type: String, enum: ['text', 'image', 'video', 'file', 'gif', 'voice'], default: 'text' },
-  content: { type: String, default: "" }, // Encrypted text or Caption
-  fileUrl: { type: String, default: "" }, // URL for Image/Video/Audio/GIF
+const messageSchema = new mongoose.Schema({
+  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  chat: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat', required: true },
+  type: { 
+    type: String, 
+    enum: ['text', 'image', 'video', 'audio', 'file', 'gif', 'voice', 'sticker'], 
+    default: 'text' 
+  },
+  content: { type: String, default: "" }, 
+  fileUrl: { type: String, default: "" },
+  waveform: { type: [Number], default: [] }, 
   
-  // [NEW] Voice Note Data
-  waveform: [{ type: Number }], // Array of amplitudes for the audio visualizer
+  replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
+  isDeleted: { type: Boolean, default: false },
+  deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  isEdited: { type: Boolean, default: false },
+  
+  // [FIX] Changed from isPinned (Boolean) to pinnedBy (Array)
+  pinnedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
-  // Read Receipts
+  starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   
-  // Interactions
-  reactions: [{
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    emoji: { type: String, required: true }
-  }],
-  
-  // Metadata
-  isDeleted: { type: Boolean, default: false }, // "Delete for everyone"
-  deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // "Delete for me"
-  
-  replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
   forwarded: { type: Boolean, default: false },
-  
-  isPinned: { type: Boolean, default: false },
-  starredBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  reactions: [
+    {
+      user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      emoji: String,
+      createdAt: { type: Date, default: Date.now }
+    }
+  ]
 }, { timestamps: true });
 
-module.exports = mongoose.model('Message', MessageSchema);
+module.exports = mongoose.model('Message', messageSchema);

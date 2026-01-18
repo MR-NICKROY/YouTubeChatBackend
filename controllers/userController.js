@@ -1,112 +1,108 @@
 const User = require('../models/User');
+const { deleteFromCloudinary } = require('../utils/cloudinaryHelper');
 
-// @desc    Get current user profile
-// @route   GET /api/users/me
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password').populate('blockedUsers', 'username avatar');
+    const user = await User.findById(req.user.id).select('-password').populate('blockedUsers', 'name avatar');
     res.json(user);
-  } catch (err) {
-    res.status(500).send('Server Error');
-  }
+  } catch (err) { res.status(500).send('Server Error'); }
 };
 
-// @desc    Update user profile (Bio, Avatar, Name)
-// @route   PATCH /api/users/me
 exports.updateProfile = async (req, res) => {
-  const { username, about, avatar } = req.body;
-
-  // Build update object
-  const updateFields = {};
-  if (username) updateFields.username = username;
-  if (about) updateFields.about = about;
+  const { name, status, avatar, phone } = req.body;
   
-  // --- FIX START ---
-  // Priority: 1. New File Upload 2. String URL in body
-  if (req.file && req.file.path) {
-    updateFields.avatar = req.file.path;
-  } else if (avatar) {
-    updateFields.avatar = avatar;
-  }
-  // --- FIX END ---
-
   try {
-    // new: true returns the updated document
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { $set: updateFields },
-      { new: true, runValidators: true }
-    ).select('-password');
+    const currentUser = await User.findById(req.user.id);
+    const updateFields = {};
+    
+    if (name) updateFields.name = name;
+    if (status) updateFields.about = status; // Map 'status' to 'about'
+    if (phone) updateFields.phone = phone;
+
+    if (req.file && req.file.path) {
+      if (currentUser.avatar && currentUser.avatar.includes('cloudinary')) {
+         await deleteFromCloudinary(currentUser.avatar); 
+      }
+      updateFields.avatar = req.file.path;
+    } else if (avatar) {
+      if (avatar === "" && currentUser.avatar) await deleteFromCloudinary(currentUser.avatar);
+      updateFields.avatar = avatar;
+    }
+
+    const user = await User.findByIdAndUpdate(req.user.id, { $set: updateFields }, { new: true }).select('-password');
+
+    // [NEW] BROADCAST UPDATE TO ALL CLIENTS
+    // This allows other users (friends/contacts) to see the changes immediately
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_updated', user); 
+    }
 
     res.json(user);
-  } catch (err) {
-    res.status(500).send('Server Error');
+  } catch (err) { 
+    console.error("Update Profile Error:", err);
+    res.status(500).send('Server Error'); 
   }
 };
-
-// @desc    Search all users (by name or email)
-// @route   GET /api/users/search?search=john
 exports.searchUsers = async (req, res) => {
-  const keyword = req.query.search
-    ? {
-        $or: [
-          { username: { $regex: req.query.search, $options: 'i' } },
-          { email: { $regex: req.query.search, $options: 'i' } },
-        ],
-      }
-    : {};
-
+  const keyword = req.query.search ? {
+      $or: [
+        { name: { $regex: req.query.search, $options: 'i' } },
+        { phone: { $regex: req.query.search, $options: 'i' } },
+      ],
+    } : {};
   try {
-    // Find users matching keyword, excluding the current logged-in user
     const users = await User.find(keyword).find({ _id: { $ne: req.user.id } }).select('-password');
     res.json(users);
-  } catch (err) {
-    res.status(500).send('Server Error');
-  }
+  } catch (err) { res.status(500).send('Server Error'); }
 };
 
-// @desc    Block a user
-// @route   POST /api/users/block
-exports.blockUser = async (req, res) => {
-  const { userIdToBlock } = req.body;
+// [FIXED] Updated to accept 'userId' to match Frontend API
+exports.blockUser = async (req, res) => { 
+  const { userId, userIdToBlock } = req.body; 
+  const targetId = userId || userIdToBlock; // Handle both cases for safety
+
+  if (!targetId) return res.status(400).json({ msg: "User ID is required" });
 
   try {
-    // Use $addToSet to avoid duplicate entries in the array
     const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { $addToSet: { blockedUsers: userIdToBlock } },
+      req.user.id, 
+      { $addToSet: { blockedUsers: targetId } }, 
       { new: true }
     ).select('-password');
-
     res.json(user.blockedUsers);
-  } catch (err) {
-    res.status(500).send('Server Error');
-  }
+  } catch (err) { res.status(500).send('Server Error'); }
 };
 
-// @route   POST /api/users/unblock
-exports.unblockUser = async (req, res) => {
-  const { userIdToUnblock } = req.body;
+// [FIXED] Updated to accept 'userId' to match Frontend API
+exports.unblockUser = async (req, res) => { 
+  const { userId, userIdToUnblock } = req.body;
+  const targetId = userId || userIdToUnblock; // Handle both cases for safety
+
+  if (!targetId) return res.status(400).json({ msg: "User ID is required" });
 
   try {
-    // Use $pull to remove the ID from the blockedUsers array
     const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { $pull: { blockedUsers: userIdToUnblock } },
+      req.user.id, 
+      { $pull: { blockedUsers: targetId } }, 
       { new: true }
     ).select('-password');
-
     res.json(user.blockedUsers);
-  } catch (err) {
-    res.status(500).send('Server Error');
-  }
+  } catch (err) { res.status(500).send('Server Error'); }
 };
-// @desc    Get list of blocked users
-// @route   GET /api/users/blocklist
-exports.getBlockList = async (req, res) => {
+
+exports.getBlockList = async (req, res) => { 
   try {
-    const user = await User.findById(req.user.id).populate('blockedUsers', 'username avatar email');
+    const user = await User.findById(req.user.id).populate('blockedUsers', 'name avatar phone about');
     res.json(user.blockedUsers);
+  } catch (err) { res.status(500).send('Server Error'); }
+};
+// [FIX] Added missing function
+exports.getLastSeen = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select('lastSeen');
+    if (!user) return res.status(404).json({ msg: "User not found" });
+    res.json({ lastSeen: user.lastSeen });
   } catch (err) {
     res.status(500).send('Server Error');
   }

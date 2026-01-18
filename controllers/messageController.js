@@ -1,70 +1,98 @@
 const Message = require('../models/Message');
 const Chat = require('../models/Chat');
 const { encryptMessage, decryptMessage } = require('../utils/encryption');
+const { deleteFromCloudinary } = require('../utils/cloudinaryHelper');
 
 // Helper: Deep Decrypt
 const decryptAndFormat = (msg) => {
   if (!msg) return null;
   const msgObj = msg.toObject ? msg.toObject() : msg;
+  
   if (msgObj.content) {
     try { msgObj.content = decryptMessage(msgObj.content); } catch (e) {}
   }
+  
   if (msgObj.replyTo && msgObj.replyTo.content) {
     try { msgObj.replyTo.content = decryptMessage(msgObj.replyTo.content); } catch (e) {}
   }
+  
   return msgObj;
 };
 
-// Send Message
+// =====================================================================
+// SEND MESSAGE
+// =====================================================================
 exports.sendMessage = async (req, res) => {
-  // [UPDATED] Check req.params.chatId (for POST /chats/:chatId/messages)
   const chatId = req.body.chatId || req.params.chatId;
-  const { content, type, fileUrl, replyTo, waveform } = req.body;
+  let { content, type, fileUrl, replyTo, waveform } = req.body;
 
   try {
     const encryptedContent = content ? encryptMessage(content) : "";
     const finalFileUrl = fileUrl || (req.file ? req.file.path : "");
-    let newMessage = {
-      sender: req.user.id,
-      content: encryptedContent,
-      chat: chatId,
-      type: type || 'text',
-     fileUrl: finalFileUrl,
-      replyTo: replyTo || null,
-      waveform: waveform || [],
-      readBy: [req.user.id] 
-    };
-    let message = await Message.create(newMessage);
-    message = await message.populate('sender', 'username avatar');
-   message = await message.populate({
-      path: 'chat',
-      populate: {
-        path: 'participants',
-        select: 'username avatar email'
+
+    if (!type) {
+      if (finalFileUrl) {
+        if (finalFileUrl.match(/\.(gif)$/i)) type = 'gif';
+        else if (finalFileUrl.match(/\.(mp4|mov|avi)$/i)) type = 'video';
+        else if (finalFileUrl.match(/\.(mp3|wav|m4a|aac)$/i)) type = 'voice'; 
+        else type = 'image';
+      } else {
+        type = 'text';
       }
-    });
-    message = await message.populate('replyTo');
-    
+    }
+
+    let newMessageData = {
+      sender: req.user.id,
+      chat: chatId,
+      type: type,
+      content: encryptedContent, 
+      fileUrl: finalFileUrl,     
+      replyTo: replyTo || null,  
+      waveform: waveform || [],
+      readBy: [] 
+    };
+
+    let message = await Message.create(newMessageData);
+
+    message = await message.populate([
+      { path: 'sender', select: 'name username avatar phone' },
+      { 
+        path: 'replyTo', 
+        select: 'content type fileUrl sender', 
+        populate: { path: 'sender', select: 'name username avatar' }
+      },
+      {
+        path: 'chat',
+        populate: { path: 'participants', select: 'username avatar email name' }
+      }
+    ]);
+
     await Chat.findByIdAndUpdate(chatId, { lastMessage: message });
     res.json(decryptAndFormat(message));
   } catch (err) {
+    console.error("SendMessage Error:", err);
     res.status(400).send(err.message);
   }
 };
 
-// [UPDATED] Fetch Messages (Pagination)
+// =====================================================================
+// ALL MESSAGES
+// =====================================================================
 exports.allMessages = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
-    
     const messages = await Message.find({ chat: req.params.chatId })
-      .populate('sender', 'username avatar email')
-      .populate('replyTo')
-      .sort({ createdAt: -1 }) // Newest first for pagination
+      .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .populate('sender', 'name avatar phone')
+      .populate('reactions.user', 'name username avatar') 
+      .populate({
+        path: 'replyTo',
+        select: 'content type fileUrl sender', 
+        populate: { path: 'sender', select: 'name username avatar' }
+      });
 
-    // Reverse back to chronological order
     const decryptedMessages = messages.map(msg => decryptAndFormat(msg)).reverse();
     res.json(decryptedMessages);
   } catch (err) {
@@ -72,55 +100,102 @@ exports.allMessages = async (req, res) => {
   }
 };
 
-// Delete Message
+// =====================================================================
+// DELETE MESSAGE
+// =====================================================================
 exports.deleteMessage = async (req, res) => {
-  const { mode } = req.query; 
   try {
-    if (mode === 'delete_for_everyone') {
-      const msg = await Message.findByIdAndUpdate(req.params.messageId, {
-        isDeleted: true,
-        content: encryptMessage("This message was deleted"),
-        fileUrl: ""
-      }, { new: true }).populate('replyTo');
-      res.json(decryptAndFormat(msg));
-    } else {
-      await Message.findByIdAndUpdate(req.params.messageId, {
-        $addToSet: { deletedFor: req.user.id }
-      });
-      res.json({ msg: "Message deleted for me" });
+    const messageId = req.params.messageId;
+    const userId = req.user.id;
+
+    const msg = await Message.findById(messageId);
+    if (!msg) return res.status(404).json({ msg: "Message not found" });
+
+    // [SECURITY] Only sender can delete
+    if (msg.sender.toString() !== userId) {
+      return res.status(403).json({ msg: "You can only delete your own messages." });
     }
+
+    if (msg.fileUrl) {
+      let resourceType = 'image';
+      if (['video', 'audio', 'voice'].includes(msg.type)) resourceType = 'video';
+      if (msg.type === 'file') resourceType = 'raw';
+      try {
+        await deleteFromCloudinary(msg.fileUrl, resourceType);
+      } catch (e) {
+        console.error("Cloudinary delete error:", e);
+      }
+    }
+
+    const updatedMsg = await Message.findByIdAndUpdate(messageId, {
+      isDeleted: true,
+      content: encryptMessage("This message was deleted"),
+      fileUrl: "",
+      waveform: [],
+      type: 'text',
+      reactions: [] 
+    }, { new: true }).populate('replyTo'); 
+    
+    res.json(decryptAndFormat(updatedMsg));
   } catch (err) {
     res.status(400).send(err.message);
   }
 };
 
-// Edit Message
+// =====================================================================
+// EDIT MESSAGE (Added Missing Function)
+// =====================================================================
 exports.editMessage = async (req, res) => {
   const { content } = req.body;
   try {
-    const encrypted = encryptMessage(content);
-    const msg = await Message.findByIdAndUpdate(req.params.messageId, {
-       content: encrypted
-    }, { new: true }).populate('replyTo');
-    res.json(decryptAndFormat(msg));
+    const msg = await Message.findById(req.params.messageId);
+    if (!msg) return res.status(404).json({ msg: "Message not found" });
+    
+    // Check ownership
+    if (msg.sender.toString() !== req.user.id) {
+      return res.status(401).json({ msg: "You can only edit your own messages" });
+    }
+
+    // Optional: Time limit check (e.g. 15 mins)
+    // const timeDiff = Date.now() - new Date(msg.createdAt).getTime();
+    // if(timeDiff > 15 * 60 * 1000) return res.status(400).json({msg: "Edit time limit exceeded"});
+
+    const encryptedContent = encryptMessage(content);
+    
+    const updatedMsg = await Message.findByIdAndUpdate(
+      req.params.messageId, 
+      { 
+        content: encryptedContent, 
+        type: 'text', 
+        isEdited: true 
+      }, 
+      { new: true }
+    ).populate('replyTo'); 
+
+    res.json(decryptAndFormat(updatedMsg));
   } catch (err) {
     res.status(400).send(err.message);
   }
 };
 
-// Forward Message
+// =====================================================================
+// FORWARD MESSAGE
+// =====================================================================
 exports.forwardMessage = async (req, res) => {
   const { messageId, targetChatIds } = req.body;
   try {
     const originalMsg = await Message.findById(messageId);
+    if (!originalMsg) return res.status(404).json({msg: "Message not found"});
+
     const promises = targetChatIds.map(chatId => {
       return Message.create({
         sender: req.user.id,
-        content: originalMsg.content, // Already encrypted
+        content: originalMsg.content,
         chat: chatId,
         type: originalMsg.type,
         fileUrl: originalMsg.fileUrl,
-        forwarded: true
+        forwarded: true,
+        readBy: []
       });
     });
     await Promise.all(promises);
@@ -130,13 +205,22 @@ exports.forwardMessage = async (req, res) => {
   }
 };
 
-// Reactions
+// =====================================================================
+// REACTION LOGIC
+// =====================================================================
 exports.addReaction = async (req, res) => {
   const { emoji } = req.body;
   try {
+    await Message.findByIdAndUpdate(req.params.messageId, {
+      $pull: { reactions: { user: req.user.id } }
+    });
+
     const msg = await Message.findByIdAndUpdate(req.params.messageId, {
       $push: { reactions: { user: req.user.id, emoji } }
-    }, { new: true }).populate('sender', 'username avatar').populate('replyTo');
+    }, { new: true })
+    .populate('sender', 'username avatar')
+    .populate('reactions.user', 'name username avatar');
+    
     res.json(decryptAndFormat(msg));
   } catch (err) {
     res.status(400).send(err.message);
@@ -147,25 +231,28 @@ exports.removeReaction = async (req, res) => {
   try {
     const msg = await Message.findByIdAndUpdate(req.params.messageId, {
       $pull: { reactions: { user: req.user.id } }
-    }, { new: true }).populate('sender', 'username avatar').populate('replyTo');
+    }, { new: true })
+    .populate('sender', 'username avatar')
+    .populate('reactions.user', 'name username avatar');
+
     res.json(decryptAndFormat(msg));
   } catch (err) {
     res.status(400).send(err.message);
   }
 };
 
-// Starred
+// =====================================================================
+// OTHER ACTIONS (Star, Pin, Read)
+// =====================================================================
 exports.toggleStarMessage = async (req, res) => {
   try {
     const msg = await Message.findById(req.params.messageId);
     const isStarred = msg.starredBy.includes(req.user.id);
-    let updatedMsg;
-    if (isStarred) {
-      updatedMsg = await Message.findByIdAndUpdate(req.params.messageId, { $pull: { starredBy: req.user.id } }, { new: true });
-    } else {
-      updatedMsg = await Message.findByIdAndUpdate(req.params.messageId, { $addToSet: { starredBy: req.user.id } }, { new: true });
-    }
-    updatedMsg = await updatedMsg.populate('sender', 'username avatar').populate('replyTo');
+    let updatedMsg = await Message.findByIdAndUpdate(
+      req.params.messageId, 
+      isStarred ? { $pull: { starredBy: req.user.id } } : { $addToSet: { starredBy: req.user.id } }, 
+      { new: true }
+    ).populate('sender', 'username avatar');
     res.json(decryptAndFormat(updatedMsg));
   } catch (err) {
     res.status(400).send(err.message);
@@ -175,7 +262,9 @@ exports.toggleStarMessage = async (req, res) => {
 exports.getStarredMessages = async (req, res) => {
   try {
     const messages = await Message.find({ starredBy: req.user.id })
-      .populate('sender', 'username avatar').populate('chat').populate('replyTo');
+      .populate('sender', 'username avatar')
+      .populate('chat')
+      .populate({ path: 'replyTo', populate: { path: 'sender' }});
     const decrypted = messages.map(msg => decryptAndFormat(msg));
     res.json(decrypted);
   } catch (err) {
@@ -183,42 +272,65 @@ exports.getStarredMessages = async (req, res) => {
   }
 };
 
-// [NEW] Pin/Unpin
 exports.pinMessage = async (req, res) => {
   try {
-    const msg = await Message.findById(req.params.messageId);
-    const updatedMsg = await Message.findByIdAndUpdate(req.params.messageId, {
-      isPinned: !msg.isPinned
-    }, { new: true });
+    const messageId = req.params.messageId;
+    const userId = req.user.id;
+    const msg = await Message.findById(messageId);
+    
+    const isPinnedByMe = msg.pinnedBy.includes(userId);
+    let updatedMsg;
+    if (isPinnedByMe) {
+      updatedMsg = await Message.findByIdAndUpdate(messageId, { $pull: { pinnedBy: userId } }, { new: true }).populate('sender', 'username avatar');
+    } else {
+      updatedMsg = await Message.findByIdAndUpdate(messageId, { $addToSet: { pinnedBy: userId } }, { new: true }).populate('sender', 'username avatar');
+    }
     res.json(decryptAndFormat(updatedMsg));
   } catch (err) {
     res.status(400).send(err.message);
   }
 };
 
-// [NEW] Mark Read
+// [FIXED] Mark Message Read
 exports.markMessageRead = async (req, res) => {
   try {
-    const msg = await Message.findByIdAndUpdate(req.params.messageId, {
-      $addToSet: { readBy: req.user.id }
-    }, { new: true }).populate('readBy', 'username avatar');
+    const messageId = req.params.messageId;
+    const userId = req.user.id;
+
+    const originalMsg = await Message.findById(messageId);
+    if (!originalMsg) return res.status(404).json({ msg: "Message not found" });
+
+    // [LOGIC CHECK] Prevent sender from marking their own message as read
+    if (originalMsg.sender.toString() === userId) {
+      return res.status(400).json({ msg: "Cannot mark your own message as read" });
+    }
+
+    // Add user to readBy array
+    const msg = await Message.findByIdAndUpdate(messageId, {
+      $addToSet: { readBy: userId }
+    }, { new: true })
+    .populate('readBy', 'username avatar')
+    .populate('sender', 'username avatar'); // Return sender info too
+
     res.json(decryptAndFormat(msg));
   } catch (err) {
     res.status(400).send(err.message);
   }
 };
 
-// [NEW] Get Read Info
 exports.getMessageReadInfo = async (req, res) => {
   try {
-    const msg = await Message.findById(req.params.messageId).populate('readBy', 'username avatar lastSeen');
-    res.json(msg.readBy);
+    const msg = await Message.findById(req.params.messageId)
+      .populate('readBy', 'username avatar lastSeen')
+      .select('readBy sender'); 
+    if (!msg) return res.status(404).json({ msg: "Message not found" });
+    const readers = msg.readBy.filter(reader => reader._id.toString() !== msg.sender.toString());
+    res.json(readers);
   } catch (err) {
     res.status(400).send(err.message);
   }
 };
 
-// [NEW] Search in Chat (Decryption aware)
 exports.searchInChat = async (req, res) => {
   const { chatId } = req.params;
   const { query } = req.query;
@@ -234,29 +346,19 @@ exports.searchInChat = async (req, res) => {
   }
 };
 
-// [NEW] Media Gallery
 exports.getChatMedia = async (req, res) => {
   try {
     const messages = await Message.find({ 
       chat: req.params.chatId, 
-      type: { $in: ['image', 'video', 'file', 'voice'] },
+      // Added 'gif' to the list of types
+      type: { $in: ['image', 'video', 'gif'] },
       isDeleted: false
-    }).select('fileUrl type createdAt sender').sort({ createdAt: -1 });
+    })
+    .select('fileUrl type createdAt sender content') // Added content just in case
+    .sort({ createdAt: -1 });
+    
     res.json(messages);
   } catch (err) {
     res.status(400).send(err.message);
   }
 };
-
-// exports.deleteMessage = require('./messageController').deleteMessage;
-// exports.editMessage = require('./messageController').editMessage;
-// exports.forwardMessage = require('./messageController').forwardMessage;
-// exports.addReaction = require('./messageController').addReaction;
-// exports.removeReaction = require('./messageController').removeReaction;
-// exports.toggleStarMessage = require('./messageController').toggleStarMessage;
-// exports.getStarredMessages = require('./messageController').getStarredMessages;
-// exports.pinMessage = require('./messageController').pinMessage;
-// exports.markMessageRead = require('./messageController').markMessageRead;
-// exports.getMessageReadInfo = require('./messageController').getMessageReadInfo;
-// exports.searchInChat = require('./messageController').searchInChat
-// exports.getChatMedia = require('./messageController').getChatMedia;
