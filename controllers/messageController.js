@@ -23,19 +23,27 @@ const decryptAndFormat = (msg) => {
 // SEND MESSAGE
 // =====================================================================
 exports.sendMessage = async (req, res) => {
+  // [FIX] Ensure we handle both body and params, but prioritize body for FormData
   const chatId = req.body.chatId || req.params.chatId;
   let { content, type, fileUrl, replyTo, waveform } = req.body;
+
+  // [FIX] Validation: If Multer fails or body is empty, chatId might be missing
+  if (!chatId) {
+    return res.status(400).json({ msg: "Chat ID is required" });
+  }
 
   try {
     const encryptedContent = content ? encryptMessage(content) : "";
     const finalFileUrl = fileUrl || (req.file ? req.file.path : "");
 
+    // [FIX] Improved Type Inference
     if (!type) {
       if (finalFileUrl) {
         if (finalFileUrl.match(/\.(gif)$/i)) type = 'gif';
-        else if (finalFileUrl.match(/\.(mp4|mov|avi)$/i)) type = 'video';
-        else if (finalFileUrl.match(/\.(mp3|wav|m4a|aac)$/i)) type = 'voice'; 
-        else type = 'image';
+        else if (finalFileUrl.match(/\.(mp4|mov|avi|mkv)$/i)) type = 'video';
+        else if (finalFileUrl.match(/\.(mp3|wav|m4a|aac|ogg)$/i)) type = 'voice'; 
+        else if (finalFileUrl.match(/\.(jpg|jpeg|png|webp)$/i)) type = 'image';
+        else type = 'file'; // Default everything else (pdf, doc, zip) to 'file'
       } else {
         type = 'text';
       }
@@ -143,7 +151,7 @@ exports.deleteMessage = async (req, res) => {
 };
 
 // =====================================================================
-// EDIT MESSAGE (Added Missing Function)
+// EDIT MESSAGE
 // =====================================================================
 exports.editMessage = async (req, res) => {
   const { content } = req.body;
@@ -155,10 +163,6 @@ exports.editMessage = async (req, res) => {
     if (msg.sender.toString() !== req.user.id) {
       return res.status(401).json({ msg: "You can only edit your own messages" });
     }
-
-    // Optional: Time limit check (e.g. 15 mins)
-    // const timeDiff = Date.now() - new Date(msg.createdAt).getTime();
-    // if(timeDiff > 15 * 60 * 1000) return res.status(400).json({msg: "Edit time limit exceeded"});
 
     const encryptedContent = encryptMessage(content);
     
@@ -291,7 +295,6 @@ exports.pinMessage = async (req, res) => {
   }
 };
 
-// [FIXED] Mark Message Read
 exports.markMessageRead = async (req, res) => {
   try {
     const messageId = req.params.messageId;
@@ -300,17 +303,15 @@ exports.markMessageRead = async (req, res) => {
     const originalMsg = await Message.findById(messageId);
     if (!originalMsg) return res.status(404).json({ msg: "Message not found" });
 
-    // [LOGIC CHECK] Prevent sender from marking their own message as read
     if (originalMsg.sender.toString() === userId) {
       return res.status(400).json({ msg: "Cannot mark your own message as read" });
     }
 
-    // Add user to readBy array
     const msg = await Message.findByIdAndUpdate(messageId, {
       $addToSet: { readBy: userId }
     }, { new: true })
     .populate('readBy', 'username avatar')
-    .populate('sender', 'username avatar'); // Return sender info too
+    .populate('sender', 'username avatar');
 
     res.json(decryptAndFormat(msg));
   } catch (err) {
@@ -350,11 +351,10 @@ exports.getChatMedia = async (req, res) => {
   try {
     const messages = await Message.find({ 
       chat: req.params.chatId, 
-      // Added 'gif' to the list of types
       type: { $in: ['image', 'video', 'gif'] },
       isDeleted: false
     })
-    .select('fileUrl type createdAt sender content') // Added content just in case
+    .select('fileUrl type createdAt sender content') 
     .sort({ createdAt: -1 });
     
     res.json(messages);
