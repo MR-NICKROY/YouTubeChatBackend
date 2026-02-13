@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
 const { uploadToCloudinary } = require('../utils/cloudinaryHelper'); // Import helper
 
 // Helper: Generate Both Tokens
@@ -20,16 +22,34 @@ exports.register = async (req, res) => {
     let user = await User.findOne({ phone });
     if (user) return res.status(400).json({ msg: 'User already exists' });
 
-    // Handle Avatar Upload
+    // Handle Avatar Upload or Default
     let avatarUrl = "";
     if (req.file) {
       try {
-        // Upload the file buffer to Cloudinary
         const uploadResult = await uploadToCloudinary(req.file.buffer, "user_avatars");
         avatarUrl = uploadResult.secure_url;
       } catch (uploadError) {
         console.error("Avatar upload failed:", uploadError);
-        // Continue registration but without avatar, or fail. Here we continue.
+      }
+    }
+
+    // Pick a random default avatar from userIcon folder and upload to Cloudinary
+    if (!avatarUrl) {
+      try {
+        const defaultIcons = [
+          'download.png',
+          'download2.png',
+          'download3.png',
+          'download4.png',
+          'download5.png'
+        ];
+        const randomIcon = defaultIcons[Math.floor(Math.random() * defaultIcons.length)];
+        const iconPath = path.join(__dirname, '..', 'userIcon', randomIcon);
+        const iconBuffer = fs.readFileSync(iconPath);
+        const uploadResult = await uploadToCloudinary(iconBuffer, "default_avatars");
+        avatarUrl = uploadResult.secure_url;
+      } catch (defaultAvatarError) {
+        console.error("Default avatar upload failed:", defaultAvatarError);
       }
     }
 
@@ -51,6 +71,19 @@ exports.register = async (req, res) => {
     user.refreshToken = refreshToken;
     // Use findByIdAndUpdate to avoid triggering hooks unnecessarily
     await User.findByIdAndUpdate(user._id, { refreshToken });
+
+    // [NEW] Broadcast new user registration
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_registered', {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        avatar: user.avatar,
+        about: user.about
+      });
+    }
 
     res.json({ token: accessToken, refreshToken, user });
   } catch (err) {

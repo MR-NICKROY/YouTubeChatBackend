@@ -1,0 +1,1198 @@
+{
+  "info": {
+    "_postman_id": "a6903075-6f64-4d6f-8360-d7d2ca86f157",
+    "name": "ChatBackend Socket API + Native WS Notes",
+    "description": "Auto-generated from current route files.\n\nIncludes all mounted HTTP route handlers (52) with dummy payloads, bearer auth setup, and route-specific native WebSocket notes.\n\nAuth flow:\n1) Run Login (or Register) to set `token` and `refreshToken` variables automatically.\n2) Protected routes inherit Bearer {{token}} at collection level.\n\nNative WS base URL is available as variable: {{wsUrl}}\nPrimary incoming WS events from server.js: online_users, status_change, message_received, reaction_updated, typing, stop_typing, message_edited, message_deleted_everyone, message_read.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "wsUrl",
+      "value": "ws://localhost:5000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": "507f1f77bcf86cd799439011"
+    },
+    {
+      "key": "userBId",
+      "value": "507f1f77bcf86cd799439012"
+    },
+    {
+      "key": "chatId",
+      "value": "507f1f77bcf86cd799439021"
+    },
+    {
+      "key": "groupId",
+      "value": "507f1f77bcf86cd799439031"
+    },
+    {
+      "key": "messageId",
+      "value": "507f1f77bcf86cd799439041"
+    },
+    {
+      "key": "statusId",
+      "value": "507f1f77bcf86cd799439051"
+    },
+    {
+      "key": "pairingId",
+      "value": ""
+    },
+    {
+      "key": "pairingCode",
+      "value": "123456"
+    },
+    {
+      "key": "phone",
+      "value": "+15550001111"
+    },
+    {
+      "key": "password",
+      "value": "Pass@123"
+    },
+    {
+      "key": "avatarFile",
+      "value": "C:/tmp/avatar.jpg"
+    },
+    {
+      "key": "groupIconFile",
+      "value": "C:/tmp/group.jpg"
+    },
+    {
+      "key": "chatFile",
+      "value": "C:/tmp/chat.jpg"
+    },
+    {
+      "key": "audioFile",
+      "value": "C:/tmp/voice.mp3"
+    },
+    {
+      "key": "statusFile",
+      "value": "C:/tmp/status.jpg"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth (No Bearer)",
+      "item": [
+        {
+          "name": "POST /api/auth/register",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "type": "text",
+                  "value": "Alex Doe"
+                },
+                {
+                  "key": "email",
+                  "type": "text",
+                  "value": "alex@example.com"
+                },
+                {
+                  "key": "phone",
+                  "type": "text",
+                  "value": "{{phone}}"
+                },
+                {
+                  "key": "password",
+                  "type": "text",
+                  "value": "{{password}}"
+                },
+                {
+                  "key": "about",
+                  "type": "text",
+                  "value": "Hello from Postman"
+                },
+                {
+                  "key": "avatar",
+                  "type": "file",
+                  "src": "{{avatarFile}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.token) pm.collectionVariables.set(\"token\", data.token);",
+                  "  if (data.refreshToken) pm.collectionVariables.set(\"refreshToken\", data.refreshToken);",
+                  "  if (data.user && data.user._id) pm.collectionVariables.set(\"userId\", data.user._id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/auth/login",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event. Use returned token for protected routes, then use WS setup event with user id.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.token) pm.collectionVariables.set(\"token\", data.token);",
+                  "  if (data.refreshToken) pm.collectionVariables.set(\"refreshToken\", data.refreshToken);",
+                  "  if (data.user && data.user._id) pm.collectionVariables.set(\"userId\", data.user._id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/auth/refresh-token",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/refresh-token",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.token) pm.collectionVariables.set(\"token\", data.token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "GET /api/users/me",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /api/users/me",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: Server emits `user_updated` to all connected clients.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "type": "text",
+                  "value": "Alex Updated"
+                },
+                {
+                  "key": "status",
+                  "type": "text",
+                  "value": "Busy"
+                },
+                {
+                  "key": "phone",
+                  "type": "text",
+                  "value": "+15550002222"
+                },
+                {
+                  "key": "avatar",
+                  "type": "file",
+                  "src": "{{avatarFile}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/users/search",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/search?search=alex",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/users/block",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/users/block",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/users/unblock",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/users/unblock",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/users/blocklist",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/blocklist",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/users/:userId/last-seen",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/{{userBId}}/last-seen",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Chats",
+      "item": [
+        {
+          "name": "POST /api/chats",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/chats",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct server WS emit here. After creating/accessing chat, client should emit `join_chat` for realtime room events.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data._id) pm.collectionVariables.set(\"chatId\", data._id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/chats",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/chats",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/chats/:chatId",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/chats/{{chatId}}",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /api/chats/:chatId",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/chats/{{chatId}}",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /api/chats/:chatId/wallpaper",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/api/chats/{{chatId}}/wallpaper",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"wallpaper\": \"https://example.com/wallpaper.jpg\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/chats/delete-request",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/chats/delete-request",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: Server emits `delete_chat_request` to other participant user room.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chatId\": \"{{chatId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/chats/delete-respond",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/chats/delete-respond",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: If accept=true, server emits `chat_history_cleared`. If accept=false, server emits `delete_chat_rejected`.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"accept\": true,\n  \"requesterId\": \"{{userBId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/chats/:chatId/messages",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/chats/{{chatId}}/messages?page=1&limit=20",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/chats/:chatId/messages",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/chats/{{chatId}}/messages",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: After successful HTTP create, client should emit WS `new_message` with populated chat+participants payload.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Hello from chat route\",\n  \"type\": \"text\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data && data._id) pm.collectionVariables.set(\"messageId\", data._id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/chats/:chatId/media",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/chats/{{chatId}}/media",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Groups",
+      "item": [
+        {
+          "name": "POST /api/groups",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/groups",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "type": "text",
+                  "value": "Dev Group"
+                },
+                {
+                  "key": "description",
+                  "type": "text",
+                  "value": "Group from Postman"
+                },
+                {
+                  "key": "participantIds[]",
+                  "type": "text",
+                  "value": "{{userBId}}"
+                },
+                {
+                  "key": "groupIcon",
+                  "type": "file",
+                  "src": "{{groupIconFile}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data._id) pm.collectionVariables.set(\"groupId\", data._id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /api/groups/:groupId/info",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/info",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "groupName",
+                  "type": "text",
+                  "value": "Dev Group Updated"
+                },
+                {
+                  "key": "description",
+                  "type": "text",
+                  "value": "Updated desc"
+                },
+                {
+                  "key": "groupIcon",
+                  "type": "file",
+                  "src": "{{groupIconFile}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/groups/:groupId/participants",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/participants",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"participantIds\": [\n    \"{{userBId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /api/groups/:groupId/participants",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/participants",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"participantIds\": [\n    \"{{userBId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /api/groups/:groupId/leave",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/leave",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /api/groups/:groupId/admin",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/admin",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PATCH /api/groups/:groupId/permissions",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/api/groups/{{groupId}}/permissions",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: Server emits `group_permissions_updated` to group room id.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission\": \"sendMessages\",\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "POST /api/messages",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/messages",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: After successful HTTP create, client should emit WS `new_message`.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"content\": \"Hello from /api/messages\",\n  \"type\": \"text\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data && data._id) pm.collectionVariables.set(\"messageId\", data._id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/messages/:messageId/reply",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/messages/{{messageId}}/reply",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: After successful HTTP create, client should emit WS `new_message`.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chatId\": \"{{chatId}}\",\n  \"content\": \"Reply body\",\n  \"type\": \"text\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/messages/starred",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/messages/starred",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/messages/forward",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/messages/forward",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageId\": \"{{messageId}}\",\n  \"targetChatIds\": [\n    \"{{chatId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /api/messages/:messageId",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/messages/{{messageId}}",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: After HTTP success, client should emit WS `message_deleted_everyone` when deleting-for-everyone UX is intended."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /api/messages/:messageId",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/messages/{{messageId}}",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: After HTTP success, client should emit WS `message_edited`.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Edited message content\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/messages/:messageId/star",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/messages/{{messageId}}/star",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /api/messages/:messageId/reaction",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/messages/{{messageId}}/reaction",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: After HTTP success, client should emit WS `reaction_changed`.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"??\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /api/messages/:messageId/reaction",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/messages/{{messageId}}/reaction",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: After HTTP success, client should emit WS `reaction_changed`."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/messages/:messageId/pin",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/messages/{{messageId}}/pin",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/messages/:messageId/read",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/messages/{{messageId}}/read",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: After HTTP success, client should emit WS `message_read`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/messages/:messageId/info",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/messages/{{messageId}}/info",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/messages/:chatId/media",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/messages/{{chatId}}/media",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Media",
+      "item": [
+        {
+          "name": "POST /api/media/upload",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/media/upload",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{chatFile}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/media/voice",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/media/voice",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{audioFile}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/media/delete",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/media/delete",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileUrl\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/media/gifs/trending",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/media/gifs/trending",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/media/download",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/media/download?fileUrl=https%3A%2F%2Fexample.com%2Ffile.jpg",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Status",
+      "item": [
+        {
+          "name": "POST /api/status",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/status",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "caption",
+                  "type": "text",
+                  "value": "My test status"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{statusFile}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data && data._id) pm.collectionVariables.set(\"statusId\", data._id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/status",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE /api/status/:statusId",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/status/{{statusId}}",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct WebSocket event."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Pairing",
+      "item": [
+        {
+          "name": "GET /api/pairing/code",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/pairing/code",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: Web client should join WS room using returned pairingId: send `{\"event\":\"join_chat\",\"data\":{\"roomId\":\"<pairingId>\"}}`.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.pairingId) pm.collectionVariables.set(\"pairingId\", data.pairingId);",
+                  "  if (data.code) pm.collectionVariables.set(\"pairingCode\", data.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/pairing/check",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/pairing/check",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: No direct emit. Poll this endpoint while waiting for mobile confirm.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pairingId\": \"{{pairingId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/pairing/confirm",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/pairing/confirm",
+            "description": "Dummy request included for quick testing.\n\nWS Notes: Server emits `pairing_status` to pairingId room on successful confirmation.",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{pairingCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -4,13 +4,14 @@ const User = require('../models/User');
 const Message = require('../models/Message');
 const { deleteFromCloudinary } = require('../utils/cloudinaryHelper');
 const { decryptMessage } = require('../utils/encryption');
+const CHAT_USER_SAFE_FIELDS = '-password -blockedUsers -refreshToken -email -createdAt -updatedAt';
 
 // Get Metadata for a specific DM
 exports.getChatDetails = async (req, res) => {
   try {
     const chat = await Chat.findById(req.params.chatId)
-      .populate('participants', '-password')
-      .populate('admins', '-password')
+      .populate('participants', CHAT_USER_SAFE_FIELDS)
+      .populate('admins', CHAT_USER_SAFE_FIELDS)
       .populate('lastMessage');
     
     if (!chat) return res.status(404).json({ msg: "Chat not found" });
@@ -80,6 +81,15 @@ exports.createGroup = async (req, res) => {
       .populate('participants', '-password')
       .populate('admins', '-password');
 
+    // [NEW] Emit Live Update
+    const io = req.app.get('io');
+    if (io) {
+      fullGroup.participants.forEach(p => {
+        // Notify each participant individually
+        io.to(p._id.toString()).emit('new_group_added', fullGroup);
+      });
+    }
+
     res.status(200).json(fullGroup);
   } catch (err) {
     console.error("Create Group Error Details:", err);
@@ -133,9 +143,23 @@ exports.addToGroup = async (req, res) => {
       { new: true }
     )
     .populate("participants", "-password")
+      .populate("participants", "-password")
     .populate("admins", "-password");
 
     if (!added) return res.status(404).json({ msg: "Chat Not Found" });
+
+    // [NEW] Emit Live Update
+    const io = req.app.get('io');
+    if (io) {
+      // 1. Notify existing group members of the update (participant list change)
+      io.to(chatId).emit('group_updated', added);
+
+      // 2. Notify ONLY the new participants that they were added
+      participantIds.forEach(newUserId => {
+        io.to(newUserId.toString()).emit('added_to_group', added);
+      });
+    }
+
     res.json(added);
   } catch (err) {
     res.status(400).send(err.message);
@@ -160,9 +184,23 @@ exports.removeFromGroup = async (req, res) => {
       { new: true }
     )
     .populate("participants", "-password")
+      .populate("participants", "-password")
     .populate("admins", "-password");
 
     if (!removed) return res.status(404).json({ msg: "Chat Not Found" });
+
+    // [NEW] Emit Live Update
+    const io = req.app.get('io');
+    if (io) {
+      // 1. Notify remaining group members
+      io.to(chatId).emit('group_updated', removed);
+
+      // 2. Notify removed user(s)
+      participantIds.forEach(removedUserId => {
+        io.to(removedUserId.toString()).emit('removed_from_group', { chatId, groupName: removed.groupName });
+      });
+    }
+
     res.json(removed);
   } catch (err) {
     res.status(400).send(err.message);
@@ -195,6 +233,12 @@ exports.updateGroupInfo = async (req, res) => {
         .populate('participants', '-password')
         .populate('admins', '-password');
 
+    // [NEW] Emit Live Update
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.groupId).emit('group_updated', updatedChat);
+    }
+
       res.json(updatedChat);
   } catch (err) {
       res.status(400).send(err.message);
@@ -204,7 +248,11 @@ exports.updateGroupInfo = async (req, res) => {
 // Leave Group
 exports.leaveGroup = async (req, res) => {
   try {
-    await Chat.findByIdAndUpdate(req.params.groupId, { $pull: { participants: req.user.id, admins: req.user.id } });
+    // [FIX] We need to fetch the chat *after* update to broadcast the new participant list
+    const updatedChat = await Chat.findById(req.params.groupId)
+      .populate('participants', '-password')
+      .populate('admins', '-password');
+
     const user = await User.findById(req.user.id);
     await Message.create({
       chat: req.params.groupId,
@@ -212,6 +260,14 @@ exports.leaveGroup = async (req, res) => {
       type: "text",
       sender: req.user.id
     });
+
+    // [NEW] Emit Live Update
+    const io = req.app.get('io');
+    if (io) {
+      io.to(req.params.groupId).emit('group_updated', updatedChat);
+      io.to(req.params.groupId).emit('user_left_group', { chatId: req.params.groupId, userId: req.user.id, name: user.name });
+    }
+
     res.json({ msg: "You left the group" });
   } catch (err) {
     res.status(400).send(err.message);
@@ -236,6 +292,12 @@ exports.toggleAdmin = async (req, res) => {
     const updatedChat = await Chat.findByIdAndUpdate(chatId, updateQuery, { new: true })
       .populate('participants', '-password')
       .populate('admins', '-password');
+
+    // [NEW] Emit Live Update
+    const io = req.app.get('io');
+    if (io) {
+      io.to(chatId).emit('group_updated', updatedChat);
+    }
 
     res.json(updatedChat);
   } catch (err) {
@@ -284,12 +346,12 @@ exports.getChatMedia = async (req, res) => {
 // Fetch All Chats
 exports.fetchChats = async (req, res) => {
   try {
-    let chats = await Chat.find({ participants: { $elemMatch: { $eq: req.user.id } } })
-      .populate('participants', '-password')
+    const chats = await Chat.find({ participants: { $elemMatch: { $eq: req.user.id } } })
+      .populate('participants', CHAT_USER_SAFE_FIELDS)
       .populate('lastMessage')
       .sort({ updatedAt: -1 });
 
-    chats = chats.map(chat => {
+    const chatsWithCounts = await Promise.all(chats.map(async (chat) => {
       const chatObj = chat.toObject();
       const userSetting = chatObj.userSettings?.find(s => s.user.toString() === req.user.id);
 
@@ -305,10 +367,22 @@ exports.fetchChats = async (req, res) => {
         } catch (e) {}
       }
 
-      return chatObj;
-    });
+      delete chatObj.createdAt;
+      delete chatObj.updatedAt;
 
-    res.json(chats);
+      // Count unread messages
+      const unreadCount = await Message.countDocuments({
+        chat: chat._id,
+        sender: { $ne: req.user.id },
+        isDeleted: false,
+        readBy: { $ne: req.user.id }
+      });
+      chatObj.unreadCount = unreadCount;
+
+      return chatObj;
+    }));
+
+    res.json(chatsWithCounts);
   } catch (err) {
     res.status(500).send("Error fetching chats");
   }

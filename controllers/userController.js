@@ -52,7 +52,9 @@ exports.searchUsers = async (req, res) => {
       ],
     } : {};
   try {
-    const users = await User.find(keyword).find({ _id: { $ne: req.user.id } }).select('-password');
+    const users = await User.find(keyword)
+      .find({ _id: { $ne: req.user.id } })
+      .select('-password -refreshToken -blockedUsers');
     res.json(users);
   } catch (err) { res.status(500).send('Server Error'); }
 };
@@ -70,6 +72,14 @@ exports.blockUser = async (req, res) => {
       { $addToSet: { blockedUsers: targetId } }, 
       { new: true }
     ).select('-password');
+
+    // [NEW] Emit Live Update
+    const io = req.app.get('io');
+    if (io) {
+      // Notify the user who was blocked (so their client can update UI, e.g. hide status)
+      io.to(targetId).emit('user_blocked', { userId: req.user.id });
+    }
+
     res.json(user.blockedUsers);
   } catch (err) { res.status(500).send('Server Error'); }
 };
@@ -87,13 +97,21 @@ exports.unblockUser = async (req, res) => {
       { $pull: { blockedUsers: targetId } }, 
       { new: true }
     ).select('-password');
+
+    // [NEW] Emit Live Update
+    const io = req.app.get('io');
+    if (io) {
+      // Notify the user who was unblocked
+      io.to(targetId).emit('user_unblocked', { userId: req.user.id });
+    }
+
     res.json(user.blockedUsers);
   } catch (err) { res.status(500).send('Server Error'); }
 };
 
 exports.getBlockList = async (req, res) => { 
   try {
-    const user = await User.findById(req.user.id).populate('blockedUsers', 'name avatar phone about');
+    const user = await User.findById(req.user.id).populate('blockedUsers', 'name avatar');
     res.json(user.blockedUsers);
   } catch (err) { res.status(500).send('Server Error'); }
 };
@@ -104,6 +122,47 @@ exports.getLastSeen = async (req, res) => {
     if (!user) return res.status(404).json({ msg: "User not found" });
     res.json({ lastSeen: user.lastSeen });
   } catch (err) {
+    res.status(500).send('Server Error');
+  }
+};
+
+// [NEW] Get user public profile by ID (for call screen lookup)
+exports.getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select('name avatar about');
+    if (!user) return res.status(404).json({ msg: "User not found" });
+    res.json(user);
+  } catch (err) {
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: "User not found" });
+    }
+    res.status(500).send('Server Error');
+  }
+};
+// [NEW] Delete Account
+exports.deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+
+    if (!user) return res.status(404).json({ msg: "User not found" });
+
+    // Optional: Delete avatar from Cloudinary if exists
+    if (user.avatar && user.avatar.includes('cloudinary')) {
+      await deleteFromCloudinary(user.avatar);
+    }
+
+    await User.findByIdAndDelete(userId);
+
+    // Broadcast deletion
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('user_deleted', { userId });
+    }
+
+    res.json({ msg: "Account deleted successfully" });
+  } catch (err) {
+    console.error("Delete Account Error:", err);
     res.status(500).send('Server Error');
   }
 };

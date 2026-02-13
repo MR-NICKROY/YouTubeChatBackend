@@ -13,7 +13,8 @@ const {
   blockUser, 
   unblockUser,
   getBlockList,
-  getLastSeen // [FIX] Now imported correctly
+  getLastSeen,
+  getUserById
 } = require('../controllers/userController');
 
 // All routes are protected
@@ -33,5 +34,12 @@ router.get('/blocklist', auth, getBlockList);
 
 // [NEW] Route for Last Seen
 router.get('/:userId/last-seen', auth, getLastSeen);
+
+// [NEW] Route for User Profile by ID (call screen lookup)
+router.get('/:userId/profile', auth, getUserById);
+
+// [NEW] Delete Account
+const { deleteAccount } = require('../controllers/userController');
+router.delete('/me', auth, deleteAccount);
 
 module.exports = router;

@@ -45,12 +45,12 @@ router.post('/delete-respond', auth, respondDeleteChat);
 
 // Get Messages
 router.get('/:chatId/messages', auth, allMessages);   
+router.get('/:chatId/search', auth, searchInChat);
 
 // Send Message (Text/Media)
 router.post('/:chatId/messages', auth, upload.single('file'), optimizeChatMedia, sendMessage);
 
-// Search & Media
-router.get('/:chatId/search', auth, searchInChat);    
+// Media
 router.get('/:chatId/media', auth, getChatMedia);     
 
 module.exports = router;

@@ -36,7 +36,7 @@ const removeFromStatusFile = (statusId) => {
 };
 
 // [NEW] Robust Cleanup Function (Called by server.js)
-exports.cleanupExpiredStatuses = async () => {
+exports.cleanupExpiredStatuses = async (io) => {
   try {
     const now = new Date();
     // Find all statuses where 'expiresAt' has passed
@@ -57,6 +57,11 @@ exports.cleanupExpiredStatuses = async () => {
         // 3. Delete from status.json (Your Requirement)
         removeFromStatusFile(status._id.toString());
         
+        // 4. Emit Socket Event (Real-time removal)
+        if (io) {
+          io.emit('status_story_deleted', { statusId: status._id });
+        }
+
         console.log(`[Status Cleanup] Successfully deleted status: ${status._id}`);
       }
     }
@@ -79,7 +84,7 @@ exports.createStatus = async (req, res) => {
       imageUrl: req.file.path,
       caption: caption,
       // Expires in 1 minute
-      expiresAt: new Date(Date.now() + 60000) 
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
     });
 
     const savedStatus = await newStatus.save();
@@ -91,12 +96,18 @@ exports.createStatus = async (req, res) => {
       url: req.file.path,
       text: caption || "",
       uploadTime: new Date().toISOString(),
-      deleteTime: new Date(Date.now() + 60000).toISOString()
+      deleteTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     };
     updateStatusFile(statusLog);
 
     // [NOTE] setTimeout removed. Cleanup is now handled by server.js interval.
-    
+
+    // Emit Real-time Event
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('new_status_story', savedStatus);
+    }
+
     res.json(savedStatus);
 
   } catch (err) {
@@ -107,12 +118,18 @@ exports.createStatus = async (req, res) => {
 
 exports.getStatuses = async (req, res) => {
   try {
+    // [FIX] Disable Caching Headers
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+
     // Only return valid (non-expired) statuses
-    const statuses = await Status.find({ expiresAt: { $gt: new Date() } })
+    const statuses = await Status.find({ expiresAt: { $gt: new Date() } }) //
       .populate('user', 'name avatar')
       .sort({ createdAt: -1 });
+
+    console.log(`[Server] Returning ${statuses.length} statuses`); // Server-side log
     res.json(statuses);
   } catch (err) {
+    console.error(err);
     res.status(500).send('Server Error');
   }
 };
@@ -132,6 +149,12 @@ exports.deleteStatus = async (req, res) => {
     
     // Ensure it's removed from JSON too
     removeFromStatusFile(req.params.statusId);
+
+    // Emit Real-time Event
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('status_story_deleted', { statusId: req.params.statusId });
+    }
 
     res.json({ msg: "Status deleted successfully" });
   } catch (err) {
